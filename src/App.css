@@ -58,6 +58,33 @@
   font-weight: 800;
 }
 
+.sync-icon {
+  display: inline-grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(46, 204, 113, 0.28);
+  border-radius: 999px;
+  background: rgba(46, 204, 113, 0.08);
+  color: #2ecc71;
+}
+
+.sync-icon.syncing svg {
+  animation: spin 850ms linear infinite;
+}
+
+.sync-icon.error {
+  border-color: rgba(255, 118, 118, 0.34);
+  background: rgba(255, 78, 78, 0.1);
+  color: #ff7676;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .app-header h1,
 .auth-card h1,
 .hero-panel h2,
@@ -572,6 +599,16 @@ button:focus-visible {
   font-size: 26px;
 }
 
+.workout-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.workout-actions button {
+  min-width: 86px;
+}
+
 .session-progress {
   min-width: 136px;
   align-self: center;
@@ -849,6 +886,52 @@ button:focus-visible {
   color: #fff;
 }
 
+.weight-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.calendar-heading {
+  color: #788292;
+  font-size: 11px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.weight-day {
+  display: grid;
+  min-height: 58px;
+  align-content: space-between;
+  padding: 8px 6px;
+  border: 1px solid #2a2f3a;
+  border-radius: 12px;
+  background: #10131a;
+  color: #788292;
+}
+
+.weight-day small {
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.weight-day strong {
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.1;
+}
+
+.weight-day.logged {
+  border-color: rgba(46, 204, 113, 0.4);
+  background: linear-gradient(180deg, rgba(46, 204, 113, 0.16), rgba(46, 204, 113, 0.06));
+}
+
+.weight-log {
+  display: grid;
+  gap: 4px;
+}
+
 .setting {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -953,6 +1036,16 @@ button:focus-visible {
   .workout-top {
     grid-template-columns: 1fr auto;
     align-items: center;
+  }
+
+  .workout-actions {
+    grid-column: 1 / -1;
+    order: 4;
+    width: 100%;
+  }
+
+  .workout-actions button {
+    flex: 1;
   }
 
   .session-progress {

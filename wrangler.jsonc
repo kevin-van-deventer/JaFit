@@ -16,7 +16,7 @@
     {
       "binding": "DB",
       "database_name": "progressive-workout-coach-db",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "database_id": "768bb554-97da-460e-9054-5c75401fb4fa",
       "migrations_dir": "./migrations"
     }
   ],

@@ -7,6 +7,7 @@ import {
   Check,
   ChevronDown,
   Copy,
+  Download,
   Dumbbell,
   Flame,
   History,
@@ -20,6 +21,7 @@ import {
   Settings,
   ShieldCheck,
   Shuffle,
+  RefreshCw,
   Timer,
   Trash2,
   Upload,
@@ -240,6 +242,20 @@ function initialDb() {
   };
 }
 
+function createFreshUserDb(user) {
+  const db = initialDb();
+  return {
+    ...db,
+    userProfile: {
+      ...db.userProfile,
+      name: user?.name || "Athlete",
+      email: user?.email || "",
+      onboarded: false,
+      createdAt: nowIso(),
+    },
+  };
+}
+
 function loadDb() {
   try {
     const saved = localStorage.getItem(DB_KEY);
@@ -319,14 +335,15 @@ function App() {
   const [auth, setAuth] = useState(() => localStorage.getItem("pwc-auth") === "true" || Boolean(localStorage.getItem(CLOUD_TOKEN_KEY)));
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
-  const [syncState, setSyncState] = useState(cloudToken ? "Cloud sync ready" : "Local mode");
+  const [logoutLoading, setLogoutLoading] = useState(false);
+  const [syncState, setSyncState] = useState("idle");
   const [loginMode, setLoginMode] = useState("login");
   const [onboarding, setOnboarding] = useState({ step: 0, goal: "hypertrophy", experience: "intermediate", trainingDays: 4, sessionLength: 60, units: "kg" });
   const [activeWorkout, setActiveWorkout] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem(ACTIVE_KEY)) || null;
+      return JSON.parse(localStorage.getItem(ACTIVE_KEY)) || loadDb().activeWorkout || null;
     } catch {
-      return null;
+      return loadDb().activeWorkout || null;
     }
   });
   const [restTimer, setRestTimer] = useState(null);
@@ -336,6 +353,7 @@ function App() {
   const [muscleFilter, setMuscleFilter] = useState("All");
   const [equipmentFilter, setEquipmentFilter] = useState("All");
   const [elapsed, setElapsed] = useState(0);
+  const [installPrompt, setInstallPrompt] = useState(null);
   const fileInputRef = useRef(null);
 
   const activeProgram = db.programs.find((p) => p.active) || db.programs[0];
@@ -354,16 +372,35 @@ function App() {
           token: cloudToken,
           body: { data: db },
         });
-        setSyncState("Synced to Cloudflare D1");
+        setSyncState("synced");
+        setTimeout(() => setSyncState((state) => state === "synced" ? "idle" : state), 1200);
       } catch {
-        setSyncState("Cloud sync offline");
+        setSyncState("error");
       }
     }, 900);
     return () => clearTimeout(id);
   }, [db, cloudToken, auth]);
   useEffect(() => {
-    if (activeWorkout) localStorage.setItem(ACTIVE_KEY, JSON.stringify(activeWorkout));
-    else localStorage.removeItem(ACTIVE_KEY);
+    if (activeWorkout) {
+      localStorage.setItem(ACTIVE_KEY, JSON.stringify(activeWorkout));
+    } else {
+      localStorage.removeItem(ACTIVE_KEY);
+    }
+    const id = setTimeout(() => {
+      setDb((current) => {
+        if (JSON.stringify(current.activeWorkout) === JSON.stringify(activeWorkout)) return current;
+        return { ...current, activeWorkout };
+      });
+    }, 0);
+    return () => clearTimeout(id);
+  }, [activeWorkout]);
+  useEffect(() => {
+    if (!activeWorkout) return;
+    const id = setInterval(() => {
+      localStorage.setItem(ACTIVE_KEY, JSON.stringify(activeWorkout));
+      setDb((current) => ({ ...current, activeWorkout }));
+    }, 3000);
+    return () => clearInterval(id);
   }, [activeWorkout]);
   useEffect(() => {
     if (!activeWorkout) return;
@@ -396,6 +433,14 @@ function App() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [activeWorkout]);
   useEffect(() => {
+    const handler = (event) => {
+      event.preventDefault();
+      setInstallPrompt(event);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+  useEffect(() => {
     if (!toast) return;
     const id = setTimeout(() => setToast(""), 3000);
     return () => clearTimeout(id);
@@ -418,25 +463,73 @@ function App() {
       localStorage.setItem("pwc-auth", "true");
       setCloudToken(result.token);
       setAuth(true);
-      setSyncState("Cloud sync ready");
+      setSyncState("idle");
 
       const cloud = await apiRequest("/api/sync", { token: result.token });
       if (cloud.data) {
         setDb({ ...initialDb(), ...cloud.data });
+        setActiveWorkout(cloud.data.activeWorkout || null);
       } else {
-        await apiRequest("/api/sync", { method: "PUT", token: result.token, body: { data: db } });
+        const freshDb = createFreshUserDb(result.user);
+        setDb(freshDb);
+        setActiveWorkout(null);
+        localStorage.setItem(DB_KEY, JSON.stringify(freshDb));
+        localStorage.removeItem(ACTIVE_KEY);
+        await apiRequest("/api/sync", { method: "PUT", token: result.token, body: { data: freshDb } });
       }
     } catch (error) {
       if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
         localStorage.setItem("pwc-auth", "true");
         setAuth(true);
-        setSyncState("Local mode");
+        setSyncState("idle");
       } else {
         setAuthError(error.message || "Could not sign in.");
       }
     } finally {
       setAuthLoading(false);
     }
+  }
+
+  async function handleLogout() {
+    if (logoutLoading) return;
+    setLogoutLoading(true);
+    if (cloudToken) {
+      try {
+        setSyncState("Saving before logout...");
+        await apiRequest("/api/sync", {
+          method: "PUT",
+          token: cloudToken,
+          body: { data: { ...db, activeWorkout } },
+        });
+        setSyncState("synced");
+      } catch {
+        setSyncState("Logout blocked: save failed");
+        setToast("Could not save to the database. Check your connection and try logout again.");
+        setLogoutLoading(false);
+        return;
+      }
+    }
+    const freshDb = initialDb();
+    localStorage.removeItem("pwc-auth");
+    localStorage.removeItem(CLOUD_TOKEN_KEY);
+    localStorage.removeItem(CLOUD_EMAIL_KEY);
+    localStorage.removeItem(ACTIVE_KEY);
+    localStorage.setItem(DB_KEY, JSON.stringify(freshDb));
+    setCloudToken("");
+    setActiveWorkout(null);
+    setDb(freshDb);
+    setTab("today");
+    setSyncState("idle");
+    setAuth(false);
+    setLogoutLoading(false);
+  }
+
+  function cancelWorkout() {
+    localStorage.removeItem(ACTIVE_KEY);
+    setActiveWorkout(null);
+    setDb((current) => ({ ...current, activeWorkout: null }));
+    setTab("today");
+    setToast("Workout cancelled. Nothing was saved to history.");
   }
 
   function finishOnboarding() {
@@ -645,7 +738,7 @@ function App() {
           <h1>{TABS.find(([id]) => id === tab)?.[1]}</h1>
         </div>
         <div className="header-actions">
-          <span className="sync-pill">{syncState}</span>
+          <SyncIndicator state={syncState} />
           {activeWorkout && <button className="session-pill" onClick={() => setTab("workout")}><Timer size={16} /> {secondsLabel(elapsed)}</button>}
           <button className="icon-button" onClick={() => setTab("settings")} aria-label="Settings"><User size={20} /></button>
         </div>
@@ -654,10 +747,10 @@ function App() {
       <main className="shell">
         {tab === "today" && <Today db={db} activeProgram={activeProgram} todaysDay={todaysDay} startWorkout={startWorkout} setTab={setTab} setModal={setModal} />}
         {tab === "programs" && <Programs db={db} updateDb={updateDb} setModal={setModal} startWorkout={startWorkout} />}
-        {tab === "workout" && <WorkoutScreen db={db} activeWorkout={activeWorkout} elapsed={elapsed} startWorkout={startWorkout} updateWorkoutExercise={updateWorkoutExercise} updateSet={updateSet} addSet={addSet} removeSet={removeSet} setModal={setModal} />}
+        {tab === "workout" && <WorkoutScreen db={db} activeWorkout={activeWorkout} elapsed={elapsed} startWorkout={startWorkout} updateWorkoutExercise={updateWorkoutExercise} updateSet={updateSet} addSet={addSet} removeSet={removeSet} setModal={setModal} cancelWorkout={cancelWorkout} />}
         {tab === "exercises" && <Exercises db={db} query={query} setQuery={setQuery} muscleFilter={muscleFilter} setMuscleFilter={setMuscleFilter} equipmentFilter={equipmentFilter} setEquipmentFilter={setEquipmentFilter} setModal={setModal} />}
         {tab === "progress" && <Progress db={db} setModal={setModal} updateDb={updateDb} />}
-        {tab === "settings" && <SettingsScreen db={db} updateDb={updateDb} setAuth={setAuth} setCloudToken={setCloudToken} fileInputRef={fileInputRef} />}
+        {tab === "settings" && <SettingsScreen db={db} updateDb={updateDb} onLogout={handleLogout} logoutLoading={logoutLoading} fileInputRef={fileInputRef} installPrompt={installPrompt} setInstallPrompt={setInstallPrompt} />}
       </main>
 
       <nav className="bottom-nav">
@@ -710,6 +803,15 @@ function AuthScreen({ mode, setMode, onAuth, error, loading }) {
         <button className="primary large" disabled={loading} onClick={() => onAuth(mode, form)}>{loading ? "Connecting..." : mode === "login" ? "Login" : "Create Free Account"}</button>
       </div>
     </div>
+  );
+}
+
+function SyncIndicator({ state }) {
+  if (state === "idle" || state === "synced") return null;
+  return (
+    <span className={state === "error" ? "sync-icon error" : "sync-icon syncing"} title={state === "error" ? "Sync failed" : "Syncing"}>
+      <RefreshCw size={17} />
+    </span>
   );
 }
 
@@ -857,7 +959,7 @@ function move(items, from, to) {
   return copy;
 }
 
-function WorkoutScreen({ db, activeWorkout, elapsed, startWorkout, updateWorkoutExercise, updateSet, addSet, removeSet, setModal }) {
+function WorkoutScreen({ db, activeWorkout, elapsed, startWorkout, updateWorkoutExercise, updateSet, addSet, removeSet, setModal, cancelWorkout }) {
   if (!activeWorkout) {
     return <section className="empty-state"><Dumbbell size={44} /><h2>No active workout</h2><p className="muted">Start today’s plan or open an empty session.</p><button className="primary large" onClick={() => startWorkout()}>Start Workout</button></section>;
   }
@@ -872,7 +974,10 @@ function WorkoutScreen({ db, activeWorkout, elapsed, startWorkout, updateWorkout
           <span>{completedSets}/{totalSets} sets</span>
           <div className="progress-track"><i style={{ width: `${progress}%` }} /></div>
         </div>
-        <button className="danger-button" onClick={() => setModal({ type: "finish", workout: activeWorkout })}>Finish Workout</button>
+        <div className="workout-actions">
+          <button className="secondary" onClick={() => setModal({ type: "cancelWorkout", onCancel: cancelWorkout })}>Cancel</button>
+          <button className="danger-button" onClick={() => setModal({ type: "finish", workout: activeWorkout })}>Finish</button>
+        </div>
       </div>
       <div className="grid">
         {activeWorkout.exercises.map((exercise) => {
@@ -950,11 +1055,49 @@ function Progress({ db, setModal, updateDb }) {
       <ChartCard title="Estimated 1RM Trend" data={oneRm} type="line" x="date" y="oneRm" />
       <ChartCard title="Workout Frequency" data={frequency} type="bar" x="date" y="workouts" />
       <ChartCard title="Body Weight Trend" data={bodyData} type="line" x="date" y="weight" />
+      <BodyWeightCalendar db={db} updateDb={updateDb} setModal={setModal} />
       <Card title="PR History">{db.workoutHistory.flatMap((w) => w.summary?.prs || []).slice(0, 12).map((pr) => <p className="list-line" key={pr}>{pr}</p>) || <p className="muted">No PRs yet.</p>}</Card>
       <Card title="Workout History">
         {db.workoutHistory.map((workout) => <div className="history-row" key={workout.id}><button onClick={() => setModal({ type: "history", workout })}>{workout.name} · {new Date(workout.startedAt).toLocaleDateString()}</button><button className="icon-button danger" onClick={() => updateDb((c) => ({ ...c, workoutHistory: c.workoutHistory.filter((w) => w.id !== workout.id) }))}><Trash2 size={16} /></button></div>)}
       </Card>
     </section>
+  );
+}
+
+function BodyWeightCalendar({ db, updateDb, setModal }) {
+  const days = lastNDays(35);
+  const byDate = db.bodyMetrics.reduce((map, entry) => {
+    const key = entry.date.slice(0, 10);
+    map[key] ||= [];
+    map[key].push(entry);
+    return map;
+  }, {});
+  const latestByDate = Object.fromEntries(Object.entries(byDate).map(([date, entries]) => [date, entries.slice().sort((a, b) => new Date(b.date) - new Date(a.date))[0]]));
+  const latest = db.bodyMetrics.slice(0, 8);
+  return (
+    <Card title="Body Weight Calendar" subtitle="Logged weigh-ins by date" action={<button className="chip" onClick={() => setModal({ type: "bodyWeight" })}><Plus size={15} /> Log</button>}>
+      <div className="weight-calendar">
+        {["M", "T", "W", "T", "F", "S", "S"].map((day, index) => <span className="calendar-heading" key={`${day}-${index}`}>{day}</span>)}
+        {days.map((date) => {
+          const entry = latestByDate[date];
+          const day = new Date(`${date}T00:00:00`).getDate();
+          return (
+            <button className={entry ? "weight-day logged" : "weight-day"} key={date} onClick={() => entry ? setModal({ type: "bodyWeight", metric: entry }) : setModal({ type: "bodyWeight", date })}>
+              <small>{day}</small>
+              {entry ? <strong>{entry.weight}{db.settings.units}</strong> : <span />}
+            </button>
+          );
+        })}
+      </div>
+      <div className="weight-log">
+        {latest.length ? latest.map((entry) => (
+          <div className="history-row" key={entry.id}>
+            <button onClick={() => setModal({ type: "bodyWeight", metric: entry })}>{new Date(entry.date).toLocaleDateString()} · {entry.weight}{db.settings.units}</button>
+            <button className="icon-button danger" onClick={() => updateDb((c) => ({ ...c, bodyMetrics: c.bodyMetrics.filter((item) => item.id !== entry.id) }))}><Trash2 size={16} /></button>
+          </div>
+        )) : <p className="muted">Use Log Body Weight on Today or here to start tracking weigh-ins.</p>}
+      </div>
+    </Card>
   );
 }
 
@@ -974,7 +1117,7 @@ function ChartCard({ title, data, type, x, y }) {
   );
 }
 
-function SettingsScreen({ db, updateDb, setAuth, setCloudToken, fileInputRef }) {
+function SettingsScreen({ db, updateDb, onLogout, logoutLoading, fileInputRef, installPrompt, setInstallPrompt }) {
   function exportData() {
     const blob = new Blob([JSON.stringify(db, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -989,6 +1132,12 @@ function SettingsScreen({ db, updateDb, setAuth, setCloudToken, fileInputRef }) 
     if (!file) return;
     file.text().then((text) => updateDb(JSON.parse(text)));
   }
+  async function installApp() {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    await installPrompt.userChoice.catch(() => null);
+    setInstallPrompt(null);
+  }
   return (
     <section className="grid">
       <Card title="Preferences">
@@ -1000,11 +1149,12 @@ function SettingsScreen({ db, updateDb, setAuth, setCloudToken, fileInputRef }) 
       </Card>
       <Card title="Data">
         <div className="action-bar">
+          <button className="primary" disabled={!installPrompt} onClick={installApp}><Download /> Install Web App</button>
           <button className="secondary" onClick={exportData}><Save /> Export JSON</button>
           <button className="secondary" onClick={() => fileInputRef.current?.click()}><Upload /> Import JSON</button>
           <input ref={fileInputRef} className="hidden" type="file" accept="application/json" onChange={importData} />
           <button className="danger-button" onClick={() => { localStorage.clear(); location.reload(); }}><Trash2 /> Reset App Data</button>
-          <button className="secondary" onClick={() => { localStorage.removeItem("pwc-auth"); localStorage.removeItem(CLOUD_TOKEN_KEY); localStorage.removeItem(CLOUD_EMAIL_KEY); setCloudToken(""); setAuth(false); }}><User /> Logout</button>
+          <button className="secondary" disabled={logoutLoading} onClick={onLogout}><User /> {logoutLoading ? "Saving..." : "Logout"}</button>
         </div>
       </Card>
       <Card title="Database Model">
@@ -1029,7 +1179,7 @@ function AppModal({ modal, setModal, db, updateDb, activeWorkout, setActiveWorko
     <div className="modal-backdrop" onClick={close}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <button className="modal-close" onClick={close}><X /></button>
-        {modal.type === "bodyWeight" && <BodyWeightModal db={db} updateDb={updateDb} close={close} />}
+        {modal.type === "bodyWeight" && <BodyWeightModal db={db} updateDb={updateDb} close={close} metric={modal.metric} date={modal.date} />}
         {modal.type === "customExercise" && <>
           <h2>{draft.id ? "Edit Custom Exercise" : "Add Custom Exercise"}</h2>
           <input placeholder="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
@@ -1044,6 +1194,7 @@ function AppModal({ modal, setModal, db, updateDb, activeWorkout, setActiveWorko
         {modal.type === "swap" && <SwapExercise db={db} modal={modal} activeWorkout={activeWorkout} setActiveWorkout={setActiveWorkout} close={close} />}
         {modal.type === "addWorkoutExercise" && <AddWorkoutExercise db={db} activeWorkout={activeWorkout} setActiveWorkout={setActiveWorkout} close={close} />}
         {modal.type === "finish" && <FinishModal summary={summary} close={close} onSave={() => { saveWorkout(modal.workout); close(); }} />}
+        {modal.type === "cancelWorkout" && <CancelWorkoutModal close={close} onCancel={() => { modal.onCancel(); close(); }} />}
         {modal.type === "summary" && <FinishModal summary={modal.summary} close={close} saved />}
       {modal.type === "history" && <HistoryEditor workout={modal.workout} updateDb={updateDb} close={close} />}
         {modal.type === "customProgram" && <CustomProgramModal updateDb={updateDb} close={close} />}
@@ -1052,9 +1203,10 @@ function AppModal({ modal, setModal, db, updateDb, activeWorkout, setActiveWorko
   );
 }
 
-function BodyWeightModal({ db, updateDb, close }) {
-  const [weight, setWeight] = useState("");
-  return <><h2>Log Body Weight</h2><input inputMode="decimal" placeholder={`Weight (${db.settings.units})`} value={weight} onChange={(e) => setWeight(e.target.value)} /><button className="primary" onClick={() => { updateDb((c) => ({ ...c, bodyMetrics: [{ id: uid("metric"), date: nowIso(), weight }, ...c.bodyMetrics] })); close(); }}>Save</button></>;
+function BodyWeightModal({ db, updateDb, close, metric, date }) {
+  const [weight, setWeight] = useState(metric?.weight || "");
+  const [entryDate, setEntryDate] = useState((metric?.date || date || todayKey()).slice(0, 10));
+  return <><h2>{metric ? "Edit Body Weight" : "Log Body Weight"}</h2><input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} /><input inputMode="decimal" placeholder={`Weight (${db.settings.units})`} value={weight} onChange={(e) => setWeight(e.target.value)} /><button className="primary" onClick={() => { const saved = { id: metric?.id || uid("metric"), date: `${entryDate}T12:00:00.000Z`, weight }; updateDb((c) => ({ ...c, bodyMetrics: metric ? c.bodyMetrics.map((item) => item.id === metric.id ? saved : item) : [saved, ...c.bodyMetrics] })); close(); }}>Save</button></>;
 }
 
 function PlateCalculator({ weight, setWeight, bar, setBar }) {
@@ -1088,6 +1240,10 @@ function createAdHocSessionExercise(ex) {
 
 function FinishModal({ summary, close, onSave, saved }) {
   return <><h2>{saved ? "Workout Saved" : "Finish Workout"}</h2><MetricGrid items={[["Duration", secondsLabel(summary.duration), Timer], ["Sets", summary.totalSets, Activity], ["Working", summary.workingSets, ShieldCheck], ["Volume", Math.round(summary.volume), BarChart3]]} /><h3>Progression Updates</h3>{summary.progression.map((p) => <p className="list-line" key={p.exercise}><strong>{p.exercise}</strong>: {p.action} {p.note}</p>)}<h3>PRs</h3>{summary.prs.length ? summary.prs.map((pr) => <p className="list-line" key={pr}>{pr}</p>) : <p className="muted">No PRs detected.</p>} {!saved && <div className="row"><button className="secondary" onClick={close}>Edit before saving</button><button className="primary" onClick={onSave}>Save Workout</button></div>}</>;
+}
+
+function CancelWorkoutModal({ close, onCancel }) {
+  return <><h2>Cancel Workout?</h2><p className="muted">This clears the active workout and does not save it to workout history.</p><div className="row"><button className="secondary" onClick={close}>Keep Workout</button><button className="danger-button" onClick={onCancel}>Cancel Workout</button></div></>;
 }
 
 function HistoryEditor({ workout, updateDb, close }) {

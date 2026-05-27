@@ -11,7 +11,7 @@ export default {
 
       return env.ASSETS.fetch(request);
     } catch (error) {
-      return json({ error: error.message || "Unexpected server error" }, 500);
+      return json({ error: error.message || "Unexpected server error" }, error.status || 500);
     }
   },
 };
@@ -87,7 +87,7 @@ async function login(request, env) {
 async function createSession(env, user) {
   const token = crypto.randomUUID() + crypto.randomUUID().replaceAll("-", "");
   const tokenHash = await sha256(token);
-  const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000).toISOString().replace("T", " ").slice(0, 19);
   await env.DB.prepare("INSERT INTO sessions (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, datetime('now'))")
     .bind(tokenHash, user.id, expiresAt)
     .run();

@@ -5,9 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:cloudflare": "npm run build && wrangler dev",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cf:d1:create": "wrangler d1 create progressive-workout-coach-db",
+    "cf:d1:migrate:local": "wrangler d1 migrations apply progressive-workout-coach-db --local",
+    "cf:d1:migrate:remote": "wrangler d1 migrations apply progressive-workout-coach-db --remote",
+    "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "idb": "^8.0.3",
@@ -25,6 +30,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
-    "vite": "^8.0.14"
+    "vite": "^8.0.14",
+    "wrangler": "^4.95.0"
   }
 }

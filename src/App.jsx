@@ -902,7 +902,7 @@ function Programs({ db, updateDb, setModal, startWorkout }) {
       {db.programs.map((program) => (
         <Card key={program.id} title={program.name} action={<button className="chip" onClick={() => updateDb((c) => ({ ...c, programs: c.programs.map((p) => ({ ...p, active: p.id === program.id })) }))}>Set active</button>}>
           <div className="program-days">
-            {program.days.map((day) => <ProgramDay key={day.id} day={day} program={program} db={db} updateDb={updateDb} startWorkout={startWorkout} />)}
+            {program.days.map((day) => <ProgramDay key={day.id} day={day} program={program} db={db} updateDb={updateDb} startWorkout={startWorkout} setModal={setModal} />)}
           </div>
         </Card>
       ))}
@@ -910,7 +910,7 @@ function Programs({ db, updateDb, setModal, startWorkout }) {
   );
 }
 
-function ProgramDay({ day, program, db, updateDb, startWorkout }) {
+function ProgramDay({ day, program, db, updateDb, startWorkout, setModal }) {
   function patchDay(patch) {
     updateDb((current) => ({
       ...current,
@@ -918,8 +918,7 @@ function ProgramDay({ day, program, db, updateDb, startWorkout }) {
     }));
   }
   function addExercise() {
-    const ex = db.exercises[Math.floor(Math.random() * db.exercises.length)];
-    patchDay({ exercises: [...day.exercises, { id: uid("prog_ex"), exerciseId: ex.id, sets: 3, repMin: 8, repMax: 12, rir: 2, restSeconds: ex.defaultRestSeconds }] });
+    setModal({ type: "programAddExercise", programId: program.id, dayId: day.id });
   }
   return (
     <div className="program-day">
@@ -939,6 +938,7 @@ function ProgramDay({ day, program, db, updateDb, startWorkout }) {
             patchProgramExercise(updateDb, program.id, day.id, entry.id, { repMin: a || 1, repMax: b || a || 1 });
           }} />
           <input type="number" value={entry.rir} onChange={(e) => patchProgramExercise(updateDb, program.id, day.id, entry.id, { rir: Number(e.target.value) })} />
+          <button className="icon-button" title="Swap exercise" onClick={() => setModal({ type: "programSwap", programId: program.id, dayId: day.id, entryId: entry.id, primaryMuscle: ex?.primaryMuscle || "Chest" })}><Shuffle size={16} /></button>
           <button className="icon-button" onClick={() => patchDay({ exercises: move(day.exercises, idx, Math.max(0, idx - 1)) })}>↑</button>
           <button className="icon-button" onClick={() => patchDay({ exercises: move(day.exercises, idx, Math.min(day.exercises.length - 1, idx + 1)) })}>↓</button>
         </div>;
@@ -950,6 +950,25 @@ function ProgramDay({ day, program, db, updateDb, startWorkout }) {
 
 function patchProgramExercise(updateDb, programId, dayId, entryId, patch) {
   updateDb((current) => ({ ...current, programs: current.programs.map((p) => p.id === programId ? { ...p, days: p.days.map((d) => d.id === dayId ? { ...d, exercises: d.exercises.map((e) => e.id === entryId ? { ...e, ...patch } : e) } : d) } : p) }));
+}
+
+function addProgramExercise(updateDb, programId, dayId, exercise) {
+  const entry = {
+    id: uid("prog_ex"),
+    exerciseId: exercise.id,
+    sets: exercise.type === "isolation" ? 3 : 4,
+    repMin: exercise.type === "compound" ? 6 : 10,
+    repMax: exercise.type === "compound" ? 10 : 15,
+    rir: 2,
+    restSeconds: exercise.defaultRestSeconds,
+  };
+  updateDb((current) => ({
+    ...current,
+    programs: current.programs.map((program) => program.id === programId ? {
+      ...program,
+      days: program.days.map((day) => day.id === dayId ? { ...day, exercises: [...day.exercises, entry] } : day),
+    } : program),
+  }));
 }
 
 function move(items, from, to) {
@@ -1192,11 +1211,13 @@ function AppModal({ modal, setModal, db, updateDb, activeWorkout, setActiveWorko
         {modal.type === "exerciseDetail" && <ExerciseDetail exercise={modal.exercise} db={db} />}
         {modal.type === "plates" && <PlateCalculator weight={weight} setWeight={setWeight} bar={bar} setBar={setBar} />}
         {modal.type === "swap" && <SwapExercise db={db} modal={modal} activeWorkout={activeWorkout} setActiveWorkout={setActiveWorkout} close={close} />}
+        {modal.type === "programSwap" && <ProgramSwapExercise db={db} updateDb={updateDb} modal={modal} close={close} />}
+        {modal.type === "programAddExercise" && <ProgramAddExercise db={db} updateDb={updateDb} modal={modal} close={close} />}
         {modal.type === "addWorkoutExercise" && <AddWorkoutExercise db={db} activeWorkout={activeWorkout} setActiveWorkout={setActiveWorkout} close={close} />}
         {modal.type === "finish" && <FinishModal summary={summary} close={close} onSave={() => { saveWorkout(modal.workout); close(); }} />}
         {modal.type === "cancelWorkout" && <CancelWorkoutModal close={close} onCancel={() => { modal.onCancel(); close(); }} />}
         {modal.type === "summary" && <FinishModal summary={modal.summary} close={close} saved />}
-      {modal.type === "history" && <HistoryEditor workout={modal.workout} updateDb={updateDb} close={close} />}
+      {modal.type === "history" && <HistoryEditor workout={modal.workout} db={db} updateDb={updateDb} close={close} />}
         {modal.type === "customProgram" && <CustomProgramModal updateDb={updateDb} close={close} />}
       </div>
     </div>
@@ -1227,8 +1248,46 @@ function SwapExercise({ db, modal, activeWorkout, setActiveWorkout, close }) {
   return <><h2>Swap Exercise</h2>{options.map((ex) => <button className="swap-option" key={ex.id} onClick={() => { setActiveWorkout({ ...activeWorkout, exercises: activeWorkout.exercises.map((item) => item.id === modal.sessionExerciseId ? { ...item, exerciseId: ex.id, name: ex.name, primaryMuscle: ex.primaryMuscle, restSeconds: ex.defaultRestSeconds } : item) }); close(); }}>{ex.name}<span>{ex.equipment}</span></button>)}</>;
 }
 
+function ProgramSwapExercise({ db, updateDb, modal, close }) {
+  const available = db.equipmentProfiles.find((p) => p.active)?.equipment || EQUIPMENT;
+  const options = db.exercises
+    .filter((ex) => ex.primaryMuscle === modal.primaryMuscle)
+    .sort((a, b) => Number(available.includes(b.equipment)) - Number(available.includes(a.equipment)) || a.name.localeCompare(b.name));
+  function swap(exerciseId) {
+    patchProgramExercise(updateDb, modal.programId, modal.dayId, modal.entryId, { exerciseId });
+    close();
+  }
+  return <><h2>Swap Program Exercise</h2><p className="muted">Targets for sets, reps, RIR, and rest stay the same.</p>{options.map((ex) => <button className="swap-option" key={ex.id} onClick={() => swap(ex.id)}>{ex.name}<span>{ex.equipment}</span></button>)}</>;
+}
+
+function ProgramAddExercise({ db, updateDb, modal, close }) {
+  return <ExercisePicker title="Add Program Exercise" db={db} onSelect={(exercise) => { addProgramExercise(updateDb, modal.programId, modal.dayId, exercise); close(); }} />;
+}
+
 function AddWorkoutExercise({ db, activeWorkout, setActiveWorkout, close }) {
   return <><h2>Add Exercise</h2>{db.exercises.slice(0, 40).map((ex) => <button className="swap-option" key={ex.id} onClick={() => { setActiveWorkout({ ...activeWorkout, exercises: [...activeWorkout.exercises, { ...createAdHocSessionExercise(ex) }] }); close(); }}>{ex.name}<span>{ex.primaryMuscle} · {ex.equipment}</span></button>)}</>;
+}
+
+function ExercisePicker({ title, db, onSelect }) {
+  const [search, setSearch] = useState("");
+  const [muscle, setMuscle] = useState("All");
+  const [equipment, setEquipment] = useState("All");
+  const filtered = db.exercises
+    .filter((exercise) => muscle === "All" || exercise.primaryMuscle === muscle)
+    .filter((exercise) => equipment === "All" || exercise.equipment === equipment)
+    .filter((exercise) => exercise.name.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => a.primaryMuscle.localeCompare(b.primaryMuscle) || a.name.localeCompare(b.name));
+  return <>
+    <h2>{title}</h2>
+    <div className="picker-filters">
+      <label><Search size={16} /><input placeholder="Search exercise" value={search} onChange={(e) => setSearch(e.target.value)} /></label>
+      <select value={muscle} onChange={(e) => setMuscle(e.target.value)}><option>All</option>{MUSCLES.map((item) => <option key={item}>{item}</option>)}</select>
+      <select value={equipment} onChange={(e) => setEquipment(e.target.value)}><option>All</option>{EQUIPMENT.map((item) => <option key={item}>{item}</option>)}</select>
+    </div>
+    <div className="picker-list">
+      {filtered.map((exercise) => <button className="swap-option" key={exercise.id} onClick={() => onSelect(exercise)}><span><strong>{exercise.name}</strong><small>{exercise.primaryMuscle} · {exercise.movementPattern}</small></span><span>{exercise.equipment}</span></button>)}
+    </div>
+  </>;
 }
 
 function createAdHocSessionExercise(ex) {
@@ -1246,12 +1305,47 @@ function CancelWorkoutModal({ close, onCancel }) {
   return <><h2>Cancel Workout?</h2><p className="muted">This clears the active workout and does not save it to workout history.</p><div className="row"><button className="secondary" onClick={close}>Keep Workout</button><button className="danger-button" onClick={onCancel}>Cancel Workout</button></div></>;
 }
 
-function HistoryEditor({ workout, updateDb, close }) {
+function HistoryEditor({ workout, db, updateDb, close }) {
   const [draft, setDraft] = useState(workout);
+  const [addingExercise, setAddingExercise] = useState(false);
   function patchSet(exId, setId, patch) {
     setDraft({ ...draft, exercises: draft.exercises.map((ex) => ex.id === exId ? { ...ex, sets: ex.sets.map((s) => s.id === setId ? { ...s, ...patch } : s) } : ex) });
   }
-  return <><h2>Edit Past Workout</h2>{draft.exercises.map((ex) => <Card key={ex.id} title={ex.name}>{ex.sets.map((set) => <div className="set-row" key={set.id}><strong>{set.number}</strong><input value={set.weight} onChange={(e) => patchSet(ex.id, set.id, { weight: e.target.value })} /><input value={set.reps} onChange={(e) => patchSet(ex.id, set.id, { reps: e.target.value })} /><select value={set.rir} onChange={(e) => patchSet(ex.id, set.id, { rir: e.target.value })}><option>0</option><option>1</option><option>2</option><option>3</option><option>4+</option></select><button className="icon-button danger" onClick={() => setDraft({ ...draft, exercises: draft.exercises.map((x) => x.id === ex.id ? { ...x, sets: x.sets.filter((s) => s.id !== set.id) } : x) })}><Trash2 size={15} /></button></div>)}</Card>)}<button className="primary" onClick={() => { const summary = summarizeEdited(draft); updateDb((c) => ({ ...c, workoutHistory: c.workoutHistory.map((w) => w.id === draft.id ? { ...draft, summary } : w) })); close(); }}>Save Edits and Recalculate</button></>;
+  function addSet(exerciseId) {
+    setDraft({
+      ...draft,
+      exercises: draft.exercises.map((exercise) => exercise.id === exerciseId ? {
+        ...exercise,
+        sets: [...exercise.sets, { id: uid("set"), number: exercise.sets.length + 1, type: "Working", targetReps: `${exercise.repMin || 8}-${exercise.repMax || 12}`, weight: "", reps: "", rir: 2, completed: true, completedAt: nowIso() }],
+      } : exercise),
+    });
+  }
+  function addExercise(exercise) {
+    setDraft({ ...draft, exercises: [...draft.exercises, createCompletedHistoryExercise(exercise)] });
+    setAddingExercise(false);
+  }
+  if (addingExercise) {
+    return <><button className="secondary" onClick={() => setAddingExercise(false)}>Back to Workout Edit</button><ExercisePicker title="Add Forgotten Exercise" db={db} onSelect={addExercise} /></>;
+  }
+  return <><h2>Edit Past Workout</h2><div className="action-bar"><button className="secondary" onClick={() => setAddingExercise(true)}><Plus /> Add Forgotten Exercise</button></div>{draft.exercises.map((ex) => <Card key={ex.id} title={ex.name} action={<button className="chip" onClick={() => addSet(ex.id)}><Plus size={15} /> Set</button>}>{ex.sets.map((set) => <div className="set-row history-set-row" key={set.id}><strong>{set.number}</strong><input value={set.weight} placeholder="Weight" onChange={(e) => patchSet(ex.id, set.id, { weight: e.target.value })} /><input value={set.reps} placeholder="Reps" onChange={(e) => patchSet(ex.id, set.id, { reps: e.target.value })} /><select value={set.rir} onChange={(e) => patchSet(ex.id, set.id, { rir: e.target.value })}><option>0</option><option>1</option><option>2</option><option>3</option><option>4+</option></select><button className="icon-button danger" onClick={() => setDraft({ ...draft, exercises: draft.exercises.map((x) => x.id === ex.id ? { ...x, sets: x.sets.filter((s) => s.id !== set.id).map((next, index) => ({ ...next, number: index + 1 })) } : x) })}><Trash2 size={15} /></button></div>)}</Card>)}<button className="primary" onClick={() => { const summary = summarizeEdited(draft); updateDb((c) => ({ ...c, workoutHistory: c.workoutHistory.map((w) => w.id === draft.id ? { ...draft, summary } : w) })); close(); }}>Save Edits and Recalculate</button></>;
+}
+
+function createCompletedHistoryExercise(exercise) {
+  const repMin = exercise.type === "compound" ? 6 : 10;
+  const repMax = exercise.type === "compound" ? 10 : 15;
+  return {
+    id: uid("history_ex"),
+    exerciseId: exercise.id,
+    name: exercise.name,
+    primaryMuscle: exercise.primaryMuscle,
+    targetSets: 1,
+    repMin,
+    repMax,
+    targetRir: 2,
+    restSeconds: exercise.defaultRestSeconds,
+    notesOpen: false,
+    sets: [{ id: uid("set"), number: 1, type: "Working", targetReps: `${repMin}-${repMax}`, weight: "", reps: "", rir: 2, completed: true, completedAt: nowIso() }],
+  };
 }
 
 function CustomProgramModal({ updateDb, close }) {

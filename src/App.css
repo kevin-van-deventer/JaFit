@@ -556,7 +556,7 @@ button:focus-visible {
 
 .exercise-row.compact {
   display: grid;
-  grid-template-columns: 28px minmax(130px, 1fr) 54px 76px 54px 38px 38px;
+  grid-template-columns: 28px minmax(130px, 1fr) 54px 76px 54px 38px 38px 38px;
   gap: 8px;
   align-items: center;
   margin: 8px 0;
@@ -833,10 +833,54 @@ button:focus-visible {
   padding: 12px;
   background: #222631;
   color: #fff;
+  text-align: left;
 }
 
 .swap-option span {
   color: #a6adba;
+}
+
+.swap-option strong {
+  display: block;
+  color: #fff;
+}
+
+.swap-option small {
+  display: block;
+  margin-top: 3px;
+  color: #a6adba;
+}
+
+.picker-filters {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.picker-filters label {
+  position: relative;
+}
+
+.picker-filters label svg {
+  position: absolute;
+  top: 14px;
+  left: 12px;
+  color: #a6adba;
+}
+
+.picker-filters label input {
+  padding-left: 38px;
+}
+
+.picker-list {
+  display: grid;
+  max-height: min(58vh, 560px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.history-set-row {
+  grid-template-columns: 34px 1fr 1fr 78px 44px;
 }
 
 .plate-list {
@@ -972,6 +1016,10 @@ button:focus-visible {
   .filter-bar {
     grid-template-columns: 1fr 170px 170px auto;
     align-items: center;
+  }
+
+  .picker-filters {
+    grid-template-columns: 1fr 160px 160px;
   }
 
   .exercise-library {

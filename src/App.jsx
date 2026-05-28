@@ -1010,6 +1010,15 @@ function WorkoutScreen({ db, activeWorkout, elapsed, startWorkout, updateWorkout
               <button className="notes-toggle" onClick={() => updateWorkoutExercise(exercise.id, (ex) => ({ ...ex, notesOpen: !ex.notesOpen }))}>Technique Notes <ChevronDown size={16} /></button>
               {exercise.notesOpen && <div className="notes">{source?.techniqueCues.map((cue) => <p key={cue}>{cue}</p>)}</div>}
               <div className="sets-table">
+                <div className="set-row-header">
+                  <span>Set</span>
+                  <span>Type</span>
+                  <span>Target</span>
+                  <span>Weight</span>
+                  <span>Reps</span>
+                  <span>RIR</span>
+                  <span></span>
+                </div>
                 {exercise.sets.map((set) => <SetRow key={set.id} set={set} exercise={exercise} updateSet={updateSet} setModal={setModal} />)}
               </div>
               <div className="row">
@@ -1033,10 +1042,15 @@ function SetRow({ set, exercise, updateSet, setModal }) {
         <option>Warm-up</option><option>Working</option><option>Drop Set</option>
       </select></label>
       <span className="target"><small>Target</small>{set.targetReps}</span>
-      <label><span>Load</span><input inputMode="decimal" placeholder="kg" value={set.weight} onChange={(e) => updateSet(exercise.id, set.id, { weight: e.target.value })} onFocus={() => setModal({ type: "plates", weight: set.weight })} /></label>
+      <label><span>Load</span><input inputMode="decimal" placeholder="kg" value={set.weight} onChange={(e) => updateSet(exercise.id, set.id, { weight: e.target.value })} /></label>
       <label><span>Reps</span><input inputMode="numeric" placeholder="reps" value={set.reps} onChange={(e) => updateSet(exercise.id, set.id, { reps: e.target.value })} /></label>
       <label><span>RIR</span><select value={set.rir} onChange={(e) => updateSet(exercise.id, set.id, { rir: e.target.value })}><option>0</option><option>1</option><option>2</option><option>3</option><option>4+</option></select></label>
-      <button className={set.completed ? "check active" : "check"} onClick={() => updateSet(exercise.id, set.id, { completed: !set.completed })}><Check size={16} /></button>
+      <button className={set.completed ? "check active" : "check"} onClick={() => {
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+        updateSet(exercise.id, set.id, { completed: !set.completed });
+      }}><Check size={16} /></button>
     </div>
   );
 }

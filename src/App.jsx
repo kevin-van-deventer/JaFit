@@ -931,16 +931,32 @@ function ProgramDay({ day, program, db, updateDb, startWorkout, setModal }) {
       {day.exercises.map((entry, idx) => {
         const ex = db.exercises.find((item) => item.id === entry.exerciseId);
         return <div className="exercise-row compact" key={entry.id}>
-          <span className="drag">{idx + 1}</span><strong>{ex?.name}</strong>
-          <input type="number" value={entry.sets} onChange={(e) => patchProgramExercise(updateDb, program.id, day.id, entry.id, { sets: Number(e.target.value) })} />
-          <input value={`${entry.repMin}-${entry.repMax}`} onChange={(e) => {
-            const [a, b] = e.target.value.split("-").map(Number);
-            patchProgramExercise(updateDb, program.id, day.id, entry.id, { repMin: a || 1, repMax: b || a || 1 });
-          }} />
-          <input type="number" value={entry.rir} onChange={(e) => patchProgramExercise(updateDb, program.id, day.id, entry.id, { rir: Number(e.target.value) })} />
-          <button className="icon-button" title="Swap exercise" onClick={() => setModal({ type: "programSwap", programId: program.id, dayId: day.id, entryId: entry.id, primaryMuscle: ex?.primaryMuscle || "Chest" })}><Shuffle size={16} /></button>
-          <button className="icon-button" onClick={() => patchDay({ exercises: move(day.exercises, idx, Math.max(0, idx - 1)) })}>↑</button>
-          <button className="icon-button" onClick={() => patchDay({ exercises: move(day.exercises, idx, Math.min(day.exercises.length - 1, idx + 1)) })}>↓</button>
+          <div className="exercise-row-header">
+            <span className="drag">{idx + 1}</span>
+            <strong>{ex?.name}</strong>
+            <div className="exercise-actions">
+              <button className="icon-button" title="Swap exercise" onClick={() => setModal({ type: "programSwap", programId: program.id, dayId: day.id, entryId: entry.id, primaryMuscle: ex?.primaryMuscle || "Chest" })}><Shuffle size={14} /></button>
+              <button className="icon-button" onClick={() => patchDay({ exercises: move(day.exercises, idx, Math.max(0, idx - 1)) })}>↑</button>
+              <button className="icon-button" onClick={() => patchDay({ exercises: move(day.exercises, idx, Math.min(day.exercises.length - 1, idx + 1)) })}>↓</button>
+            </div>
+          </div>
+          <div className="exercise-inputs">
+            <label>
+              <span>Sets</span>
+              <input type="number" value={entry.sets} onChange={(e) => patchProgramExercise(updateDb, program.id, day.id, entry.id, { sets: Number(e.target.value) })} />
+            </label>
+            <label>
+              <span>Reps</span>
+              <input value={`${entry.repMin}-${entry.repMax}`} onChange={(e) => {
+                const [a, b] = e.target.value.split("-").map(Number);
+                patchProgramExercise(updateDb, program.id, day.id, entry.id, { repMin: a || 1, repMax: b || a || 1 });
+              }} />
+            </label>
+            <label>
+              <span>Target RIR</span>
+              <input type="number" value={entry.rir} onChange={(e) => patchProgramExercise(updateDb, program.id, day.id, entry.id, { rir: Number(e.target.value) })} />
+            </label>
+          </div>
         </div>;
       })}
       <button className="secondary full" onClick={addExercise}><Plus /> Add Exercise</button>

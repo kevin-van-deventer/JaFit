@@ -125,8 +125,21 @@
   gap: 14px;
 }
 
+.grid > * {
+  min-width: 0;
+}
+
 .desktop-2 {
-  grid-template-columns: 1fr;
+  grid-template-columns: 100%;
+}
+
+@media (min-width: 768px) {
+  .desktop-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .quick-actions {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 .auth-screen {
@@ -383,6 +396,9 @@ button:focus-visible {
 
 .card {
   padding: 16px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .card,
@@ -568,23 +584,116 @@ button:focus-visible {
   gap: 12px;
 }
 
+.program-days > * {
+  min-width: 0;
+}
+
 .program-day {
   padding: 12px;
   background: #222631;
-}
-
-.exercise-row.compact {
-  display: grid;
-  grid-template-columns: 28px minmax(130px, 1fr) 54px 76px 54px 38px 38px 38px;
-  gap: 8px;
-  align-items: center;
-  margin: 8px 0;
   overflow-x: auto;
 }
 
-.exercise-row.compact input {
-  min-width: 54px;
+.program-day .row {
+  flex-wrap: nowrap;
 }
+
+.program-day .row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.exercise-row.compact {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 12px 0;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(16, 19, 26, 0.48);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  width: 100%;
+  min-width: 0;
+}
+
+.exercise-row-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.exercise-row-header .drag {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--accent, #ff7a1a);
+  background: rgba(255, 122, 26, 0.1);
+  border-radius: 6px;
+}
+
+.exercise-row-header strong {
+  font-size: 15px;
+  font-weight: 800;
+  color: #fff;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.exercise-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.exercise-actions .icon-button {
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.exercise-inputs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  width: 100%;
+}
+
+.exercise-inputs label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.exercise-inputs label span {
+  font-size: 11px;
+  font-weight: 800;
+  color: #788292;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.exercise-inputs input {
+  width: 100%;
+  min-height: 38px;
+  padding: 6px 10px;
+  font-size: 14px;
+  text-align: center;
+  border-radius: 10px;
+  background: #0f1115;
+  border: 1px solid #2a2f3a;
+}
+
 
 .full {
   width: 100%;
@@ -687,6 +796,14 @@ button:focus-visible {
   color: #c8ced8;
 }
 
+.sets-table {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+
 .set-row-header {
   display: grid;
   grid-template-columns: 28px minmax(92px, 1fr) 64px 74px 66px 62px 44px;
@@ -699,6 +816,7 @@ button:focus-visible {
   font-weight: 800;
   text-transform: uppercase;
   text-align: center;
+  min-width: 480px;
 }
 
 .set-row {
@@ -707,11 +825,11 @@ button:focus-visible {
   gap: 7px;
   align-items: center;
   margin-bottom: 8px;
-  overflow-x: auto;
   padding: 6px;
   border: 1px solid transparent;
   border-radius: 14px;
   background: #10131a;
+  min-width: 480px;
 }
 
 .set-row strong {
@@ -1039,65 +1157,7 @@ button:focus-visible {
   text-align: center;
 }
 
-@media (min-width: 760px) {
-  .app {
-    padding: 26px 28px 118px;
-  }
 
-  .desktop-2 {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .filter-bar {
-    grid-template-columns: 1fr 170px 170px auto;
-    align-items: center;
-  }
-
-  .picker-filters {
-    grid-template-columns: 1fr 160px 160px;
-  }
-
-  .exercise-library {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .quick-actions {
-    grid-template-columns: repeat(3, 1fr);
-  }
-
-  .metric-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
-
-  .modal-backdrop {
-    place-items: center;
-  }
-
-  .sync-pill {
-    display: inline-flex;
-  }
-}
-
-@media (min-width: 1080px) {
-  .app {
-    padding-left: 126px;
-  }
-
-  .bottom-nav {
-    top: 24px;
-    right: auto;
-    bottom: 24px;
-    left: 24px;
-    width: 78px;
-    max-width: none;
-    grid-template-columns: 1fr;
-    align-content: start;
-  }
-
-  .bottom-nav button {
-    min-height: 68px;
-  }
-}
 
 @media (max-width: 560px) {
   .bottom-nav span {
@@ -1113,7 +1173,34 @@ button:focus-visible {
   }
 
   .hero-stats {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .hero-stats span {
+    padding: 8px 4px;
+    font-size: 11px;
+  }
+
+  .hero-stats strong {
+    font-size: 14px;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  .modal-backdrop {
+    padding: 0;
+  }
+
+  .modal {
+    border-radius: 24px 24px 0 0;
+    border-right: none;
+    border-left: none;
+    border-bottom: none;
+    padding: 20px 16px;
   }
 
   .workout-top {
@@ -1138,45 +1225,51 @@ button:focus-visible {
   }
 
   .set-row-header {
-    grid-template-columns: 28px minmax(70px, 1.2fr) minmax(40px, 0.8fr) minmax(62px, 1.1fr) minmax(48px, 0.8fr) minmax(45px, 0.8fr) 38px;
+    grid-template-columns: 18px minmax(54px, 1.2fr) 32px minmax(56px, 1fr) minmax(46px, 1fr) minmax(38px, 0.9fr) 36px;
     gap: 4px;
-    padding: 6px 4px;
-    font-size: 10px;
+    padding: 6px 2px;
+    font-size: 9px;
+    min-width: 0 !important;
+    width: 100%;
   }
 
   .set-row {
-    grid-template-columns: 28px minmax(70px, 1.2fr) minmax(40px, 0.8fr) minmax(62px, 1.1fr) minmax(48px, 0.8fr) minmax(45px, 0.8fr) 38px;
+    grid-template-columns: 18px minmax(54px, 1.2fr) 32px minmax(56px, 1fr) minmax(46px, 1fr) minmax(38px, 0.9fr) 36px;
     gap: 4px;
-    padding: 6px 4px;
+    padding: 6px 2px;
+    min-width: 0 !important;
+    width: 100%;
   }
 
   .set-row input,
   .set-row select {
-    padding: 8px 3px;
-    font-size: 13px;
+    padding: 6px 2px;
+    font-size: 14px;
     text-align: center;
-    min-height: 38px;
+    min-height: 36px;
     border-radius: 8px;
   }
 
   .set-row select {
     text-align-last: center;
     padding-right: 2px;
-  }
-
-  .set-row strong {
     font-size: 13px;
   }
 
-  .set-row .target {
+  .set-row strong {
     font-size: 12px;
+  }
+
+  .set-row .target {
+    font-size: 11px;
     color: #a6adba;
     text-align: center;
   }
 
   .set-row .check {
-    width: 38px;
-    height: 38px;
+    width: 36px;
+    height: 36px;
     border-radius: 8px;
   }
 }
+
